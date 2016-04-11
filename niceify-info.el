@@ -1,4 +1,8 @@
 ;; this is actually shaping up pretty nicely
+;; TODO fontify elisp examples (from 2 indents followed by `(' until matching `)')
+;; TODO fontify bold *...* and italic _..._
+;; TODO MAYBE make reversible
+;; TODO make distributable
 
 (defun niceify-info nil
   "Apply niceification functions to Info buffers."

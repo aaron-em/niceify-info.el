@@ -19,19 +19,38 @@
 (define-key niceify-info-map [follow-link]
   'mouse-face)
 
+;; FIXME rename me
 (defun niceify-follow-link nil
+  "Follow a link produced by Info niceification."
   (interactive)
-  (let ((niceify-link-data (get-text-property (point) 'niceify-link))
+  (let ((niceify-link-props (get-text-property (point) 'niceify-link-props))
         type name fun)
     (cond
-      ((null niceify-link-data)
+      ((null niceify-link-props)
        (message "Not on a niceified info link"))
       (t
-       (setq type (plist-get niceify-link-data :type))
-       (setq name (plist-get niceify-link-data :name))
+       (setq type (plist-get niceify-link-props :type))
+       (setq name (plist-get niceify-link-props :name))
        (setq fun (intern (concat "describe-" (symbol-name type))))
        (let ((help-window-select t))
          (funcall fun name))))))
+
+(defun niceify-info-add-link (from to type name)
+  "Niceify a reference.
+
+Specifically, apply a set of text properties, over the range of
+buffer positions between FROM and TO, which together constitute a
+niceification link, and which cause the newly added link to
+interoperate correctly with those added by Info-mode itself."
+  (add-text-properties from to
+                       (list 'face 'link
+                             'link 't
+                             'keymap niceify-info-map
+                             'mouse-face 'highlight
+                             'niceify-link-props (list :type type
+                                                       :name name)
+                             'help-echo (concat "mouse-1: visit documentation for this "
+                                                (symbol-name type)))))
 
 (defun niceify-info-refs nil
   "Link backtick-and-quote references to the documentation of
@@ -50,26 +69,20 @@ things they reference."
                        (t 'unknown))))
           (if (and (not (eq type 'unknown))
                    (not (eq name 'nil)))
-              ;; abstract me over type, for use in niceifying headers
-            (add-text-properties from to
-                                 `(face link
-                                        link t
-                                        keymap ,niceify-info-map
-                                        local-map ,niceify-info-map
-                                        mouse-face highlight
-                                        niceify-link ,(list :type type
-                                                            :name name)
-                                        help-echo ,(concat "mouse-1: visit help for this "
-                                                           (symbol-name type)
-                                                           " in other window")))))))))
+            (niceify-info-add-link from to type name)))))))
 
 (defun niceify-info-headers nil
   "Highlight function, variable, macro, etc. description headers
 in Info with arbitrary faces."
-  (let ((type-face 'italic)
-        (name-face 'bold)
-        (args-face 'italic)
-        (what-it-was inhibit-read-only))
+  (let ((args-face 'italic)
+        (what-it-was inhibit-read-only)
+        type name
+        (type-map '((command . function)
+                    (user\ option . variable)
+                    (function . function)
+                    (variable . variable)))
+        (face-map '((function . font-lock-function-name-face)
+                    (variable . font-lock-variable-name-face))))
     (let (from to line-start)
       (setq inhibit-read-only t)
       (save-match-data
@@ -82,14 +95,24 @@ in Info with arbitrary faces."
 
             (setq from (point))
             (re-search-forward ":" nil t)
+            (backward-char 1)
             (setq to (point))
-            (add-face-text-property from to type-face)
+            (setq type
+                  (cdr (assoc 
+                        (intern (downcase (buffer-substring-no-properties from to)))
+                        type-map)))
+            (add-face-text-property from to
+                                    (cdr (assoc type face-map)))
 
             (re-search-forward " " nil t)
             (setq from (point))
-            (re-search-forward " " nil t)
+            (while (not (or (looking-at " ")
+                            (eolp)))
+              (forward-char 1))
             (setq to (point))
-            (add-face-text-property from to name-face)
+            (niceify-info-add-link from to
+                                   type
+                                   (intern (buffer-substring-no-properties from to)))
 
             (setq from (point))
             (end-of-line)

@@ -5,7 +5,7 @@
   (let ((inhibit-ro-prev-value inhibit-read-only))
     (unwind-protect
          (niceify-info-headers)
-         (niceify-info-refs))
+      (niceify-info-refs))
     (set-buffer-modified-p nil)
     (setq inhibit-read-only inhibit-ro-prev-value)))
 
@@ -69,20 +69,23 @@ things they reference."
                        (t 'unknown))))
           (if (and (not (eq type 'unknown))
                    (not (eq name 'nil)))
-            (niceify-info-add-link from to type name)))))))
+              (niceify-info-add-link from to type name)))))))
 
 (defun niceify-info-headers nil
   "Highlight function, variable, macro, etc. description headers
 in Info with arbitrary faces."
-  (let ((args-face 'italic)
-        (what-it-was inhibit-read-only)
-        type name
-        (type-map '((command . function)
-                    (user\ option . variable)
-                    (function . function)
-                    (variable . variable)))
-        (face-map '((function . font-lock-function-name-face)
-                    (variable . font-lock-variable-name-face))))
+  (let* ((args-face 'italic)
+         (indent-spaces 5) ;; NB this may not be immutable, though seems so
+         (further-indent-regex
+          (concat " \\{" (* indent-spaces 2) ",\\}"))
+         type
+         name
+         (type-map '((command . function)
+                     (user\ option . variable)
+                     (function . function)
+                     (variable . variable)))
+         (face-map '((function . font-lock-function-name-face)
+                     (variable . font-lock-variable-name-face))))
     (let (from to line-start)
       (setq inhibit-read-only t)
       (save-match-data
@@ -116,6 +119,13 @@ in Info with arbitrary faces."
 
             (setq from (point))
             (end-of-line)
+
+            (while (save-excursion
+                     (forward-char 1)
+                     (looking-at further-indent-regex))
+              (forward-char 1)
+              (end-of-line))
+            
             (add-face-text-property from (point) args-face)))))))
 
 (add-hook 'Info-selection-hook

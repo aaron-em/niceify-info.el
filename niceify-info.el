@@ -77,7 +77,7 @@ in Info with arbitrary faces."
   (let* ((args-face 'italic)
          (indent-spaces 5) ;; NB this may not be immutable, though seems so
          (further-indent-regex
-          (concat " \\{" (* indent-spaces 2) ",\\}"))
+          (concat " \\{" (number-to-string (* indent-spaces 2)) ",\\}"))
          type
          name
          (type-map '((command . function)

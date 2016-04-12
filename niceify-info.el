@@ -1,17 +1,21 @@
 ;; this is actually shaping up pretty nicely
 ;; TODO fontify elisp examples (from 2 indents followed by `(' until matching `)')
-;; TODO fontify bold *...* and italic _..._
+;;  - but some elisp examples start with ; (comments)
+;; DONE fontify bold *...* and italic _..._
 ;; TODO MAYBE make reversible
+;; TODO what about autoloads not currently loaded
 ;; TODO make distributable
 
 (defun niceify-info nil
   "Apply niceification functions to Info buffers."
   (let ((inhibit-ro-prev-value inhibit-read-only))
     (unwind-protect
-         (niceify-info-headers)
-      (niceify-info-refs))
-    (set-buffer-modified-p nil)
-    (setq inhibit-read-only inhibit-ro-prev-value)))
+         (progn
+           (niceify-info-emphasis)
+           (niceify-info-headers)
+           (niceify-info-refs))
+      (set-buffer-modified-p nil)
+      (setq inhibit-read-only inhibit-ro-prev-value))))
 
 (defvar niceify-info-map (make-sparse-keymap)
   "Keymap applied to links created during niceification.")
@@ -22,6 +26,24 @@
   'niceify-follow-link)
 (define-key niceify-info-map [follow-link]
   'mouse-face)
+
+(defun niceify-info-emphasis nil
+  "Fontify *bold* and _underlined_ emphases."
+  (let ((face-map '(("_" . italic)
+                    ("*" . bold)))
+        emphasis-char)
+    (save-match-data
+      (save-excursion
+        (beginning-of-buffer)
+        (while (re-search-forward "[	
+ ]\\([\\_*]\\)\\([^	
+ ].*?[^	
+ ]\\)\\1\\(?:[	
+ ]\\|$\\)" nil t)
+          (setq emphasis-char (match-string 1))
+          (add-text-properties (match-beginning 2)
+                               (match-end 2)
+                               `(face ,(cdr (assoc emphasis-char face-map)))))))))
 
 ;; FIXME rename me
 (defun niceify-follow-link nil

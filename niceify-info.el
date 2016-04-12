@@ -6,6 +6,33 @@
 ;; TODO what about autoloads not currently loaded
 ;; TODO make distributable
 
+;; TODO cover all of these things in headers:
+;; [@emacs-vm] info $ zcat *.gz | grep -P '^ -- (.*?):' | cut -d' ' -f3 | cut -d':' -f1 | sort | uniq
+;; Class
+;; Command (function)
+;; Const (variable?)
+;; Constant (variable?)
+;; eieio-instance-tracker-find
+;; eieio-speedbar-create
+;; Face
+;; Function
+;; global-semantic-idle-completions-mode
+;; global-semantic-idle-summary-mode
+;; Hook (variable)
+;; Keymap (??)
+;; Macro (function)
+;; Method (function?)
+;; Normal
+;; Option (variable)
+;; Prefix
+;; Signal
+;; Special
+;; Type
+;; User
+;; Variable
+;; Widget
+
+
 (defun niceify-info nil
   "Apply niceification functions to Info buffers."
   (let ((inhibit-ro-prev-value inhibit-read-only))

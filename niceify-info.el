@@ -61,6 +61,19 @@
        (let ((help-window-select t))
          (funcall fun name))))))
 
+(defun niceify-info-fontify-as-elisp (from to)
+  "Fontify a region as Emacs Lisp source."
+  (let ((content (buffer-substring-no-properties from to))
+        fontified)
+  (with-temp-buffer
+    (insert content)
+    (emacs-lisp-mode)
+    (font-lock-fontify-buffer)
+    (setq fontified (buffer-substring (point-min) (point-max))))
+  (goto-char from)
+  (delete-region from to)
+  (insert fontified)))
+
 (defun niceify-info-add-link (from to type name)
   "Niceify a reference.
 
@@ -95,7 +108,8 @@ things they reference."
                        (t 'unknown))))
           (if (and (not (eq type 'unknown))
                    (not (eq name 'nil)))
-              (niceify-info-add-link from to type name)))))))
+              (niceify-info-add-link from to type name)
+              (niceify-info-fontify-as-elisp from to)))))))
 
 (defun niceify-info-headers nil
   "Highlight function, variable, macro, etc. description headers

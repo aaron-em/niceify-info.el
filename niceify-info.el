@@ -5,7 +5,9 @@
 ;;    about all that can be relied upon is that code examples are
 ;;    indented further than paragraphs
 ;; DONE fontify bold *...* and italic _..._
-;; TODO fontify keybindings with links to describe-key
+;; CANT fontify keybindings with links to describe-key
+;;  - no (obvious?) way to know which keymap corresponds with which manual
+;;  - also custom bindings may differ from those described
 ;; TODO MAYBE make reversible
 ;; TODO what about autoloads not currently loaded
 ;; TODO make distributable

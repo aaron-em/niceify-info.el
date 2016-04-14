@@ -1,16 +1,42 @@
-;; this is actually shaping up pretty nicely
-;; DONE fontify elisp examples (from 2 indents followed by `(' until matching `)')
-;;  - but some elisp examples start with ; (comments)
-;;  - and not all manuals follow the same indent convention;
-;;    about all that can be relied upon is that code examples are
-;;    indented further than paragraphs
-;; DONE fontify bold *...* and italic _..._
-;; CANT fontify keybindings with links to describe-key
-;;  - no (obvious?) way to know which keymap corresponds with which manual
-;;  - also custom bindings may differ from those described
-;; TODO MAYBE make reversible
-;; TODO what about autoloads not currently loaded
-;; TODO make distributable
+;;; niceify-info.el --- improve usability of Info pages
+
+;; Package-Version: 20160414.001
+;; Copyright 2016 Aaron Miller <me@aaron-miller.me>
+
+;; This program is free software; you can redistribute it and/or
+;; modify it under the terms of the GNU General Public License as
+;; published by the Free Software Foundation; either version 2 of
+;; the License, or (at your option) any later version.
+
+;; This program is distributed in the hope that it will be
+;; useful, but WITHOUT ANY WARRANTY; without even the implied
+;; warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+;; PURPOSE.  See the GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public
+;; License along with this program; if not, write to the Free
+;; Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+;; MA 02111-1307 USA
+
+;;; Commentary:
+
+;; Emacs' Info manuals are extremely rich in content, but the user
+;; experience isn't all that it could be; an Emacs process contains a
+;; lot of information about the same things that Info manuals
+;; describe, but vanilla Info mode doesn't really do much to take
+;; advantage of that. Niceify-info remedies this.
+
+;; When this library is executed, it adds a hook to Info page
+;; selection which does the following things:
+
+;; ...
+
+;; TODO make reversible (so customization can work)
+;;  - sweep out existing propsets before reniceifying?
+;; TODO add customization options
+;; TODO consider whether that's even worth it
+
+;;; Code:
 
 (defun niceify-info nil
   "Apply niceification functions to Info buffers."
@@ -90,10 +116,10 @@
     (save-match-data
       (save-excursion
         (beginning-of-buffer)
-        (while (re-search-forward "[	
- ]\\([\\_*]\\)\\([^	
- ].*?[^	
- ]\\)\\1\\(?:[	
+        (while (re-search-forward "[
+ ]\\([\\_*]\\)\\([^
+ ].*?[^
+ ]\\)\\1\\(?:[
  ]\\|$\\)" nil t)
           (setq emphasis-char (match-string 1))
           (add-text-properties (match-beginning 2)
@@ -162,7 +188,8 @@ things they reference."
                        ((boundp name) 'variable)
                        (t 'unknown))))
           (if (and (not (eq type 'unknown))
-                   (not (eq name 'nil)))
+                   (not (eq name 'nil))
+                   (not (eq name 't)))
               (niceify-info-add-link from to type name)
               (niceify-info-fontify-as-elisp from to)))))))
 
@@ -204,7 +231,7 @@ in Info with arbitrary faces."
             (backward-char 1)
             (setq to (point))
             (setq type
-                  (cdr (assoc 
+                  (cdr (assoc
                         (intern (downcase (buffer-substring-no-properties from to)))
                         type-map)))
             (add-face-text-property from to
@@ -229,7 +256,12 @@ in Info with arbitrary faces."
               (forward-char 1)
               (end-of-line))
             
+            (niceify-info-fontify-as-elisp from (point))
             (add-face-text-property from (point) args-face)))))))
 
 (add-hook 'Info-selection-hook
           #'niceify-info)
+
+(provide 'niceify-info)
+
+;;; niceify-info.el ends here

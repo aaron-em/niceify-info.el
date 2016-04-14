@@ -1,37 +1,14 @@
 ;; this is actually shaping up pretty nicely
-;; TODO fontify elisp examples (from 2 indents followed by `(' until matching `)')
+;; DONE fontify elisp examples (from 2 indents followed by `(' until matching `)')
 ;;  - but some elisp examples start with ; (comments)
+;;  - and not all manuals follow the same indent convention;
+;;    about all that can be relied upon is that code examples are
+;;    indented further than paragraphs
 ;; DONE fontify bold *...* and italic _..._
+;; TODO fontify keybindings with links to describe-key
 ;; TODO MAYBE make reversible
 ;; TODO what about autoloads not currently loaded
 ;; TODO make distributable
-
-;; TODO cover all of these things in headers:
-;; [@emacs-vm] info $ zcat *.gz | grep -P '^ -- (.*?):' | cut -d' ' -f3 | cut -d':' -f1 | sort | uniq
-;; Class
-;; Command (function)
-;; Const (variable?)
-;; Constant (variable?)
-;; eieio-instance-tracker-find
-;; eieio-speedbar-create
-;; Face
-;; Function
-;; global-semantic-idle-completions-mode
-;; global-semantic-idle-summary-mode
-;; Hook (variable)
-;; Keymap (??)
-;; Macro (function)
-;; Method (function?)
-;; Normal
-;; Option (variable)
-;; Prefix
-;; Signal
-;; Special
-;; Type
-;; User
-;; Variable
-;; Widget
-
 
 (defun niceify-info nil
   "Apply niceification functions to Info buffers."
@@ -40,7 +17,8 @@
          (progn
            (niceify-info-emphasis)
            (niceify-info-headers)
-           (niceify-info-refs))
+           (niceify-info-refs)
+           (niceify-info-code-samples))
       (set-buffer-modified-p nil)
       (setq inhibit-read-only inhibit-ro-prev-value))))
 
@@ -53,6 +31,54 @@
   'niceify-follow-link)
 (define-key niceify-info-map [follow-link]
   'mouse-face)
+
+(defun niceify-info-code-samples nil
+  "Attempt to fontify Emacs Lisp code samples."
+  (let ((paragraph-indent-depth 0)
+        possible-sample-regex
+        sample-start-regex
+        sample-start sample-end sample-content sample-fontified)
+    (save-excursion
+      (save-match-data
+        (beginning-of-buffer)
+        (while (not (looking-at " +"))
+          (next-line)
+          (beginning-of-line))
+        (while (looking-at " ")
+          (incf paragraph-indent-depth)
+          (forward-char 1))
+        (setq possible-sample-regex
+              (concat "^ \\{"
+                      (number-to-string (1+ paragraph-indent-depth))
+                      ",\\}"))
+        (setq sample-start-regex (concat possible-sample-regex "[(;]"))
+        (beginning-of-buffer)
+        (while (not (eobp))
+          (next-line)
+          (beginning-of-line)
+          (cond
+            ((and (null sample-start)
+                  (looking-at sample-start-regex))
+             (progn
+               (setq sample-start (point))))
+            ((and (not (null sample-start))
+                  (not (looking-at possible-sample-regex)))
+             (progn
+               (setq sample-end (point))
+               (setq sample-content
+                     (buffer-substring-no-properties sample-start sample-end))
+               (with-temp-buffer
+                 (insert sample-content)
+                 (emacs-lisp-mode)
+                 (font-lock-fontify-buffer)
+                 (setq sample-fontified
+                       (buffer-substring (point-min) (point-max))))
+               (goto-char sample-start)
+               (delete-region sample-start sample-end)
+               (insert sample-fontified)
+               (goto-char sample-end)
+               (setq sample-start nil)
+               (setq sample-end nil)))))))))
 
 (defun niceify-info-emphasis nil
   "Fontify *bold* and _underlined_ emphases."
@@ -150,9 +176,17 @@ in Info with arbitrary faces."
          (type-map '((command . function)
                      (user\ option . variable)
                      (function . function)
-                     (variable . variable)))
+                     (variable . variable)
+                     (constant . constant)
+                     (const . constant)
+                     (face . variable)
+                     (hook . variable)
+                     (macro . function)
+                     (method . function)
+                     (option . variable)))
          (face-map '((function . font-lock-function-name-face)
-                     (variable . font-lock-variable-name-face))))
+                     (variable . font-lock-variable-name-face)
+                     (constant . font-lock-constant-face))))
     (let (from to line-start)
       (setq inhibit-read-only t)
       (save-match-data

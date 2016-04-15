@@ -1,6 +1,6 @@
 ;;; niceify-info.el --- improve usability of Info pages
 
-;; Package-Version: 20160414.001
+;; Package-Version: 20160415.001
 ;; Copyright 2016 Aaron Miller <me@aaron-miller.me>
 
 ;; This program is free software; you can redistribute it and/or
@@ -24,44 +24,218 @@
 ;; experience isn't all that it could be; an Emacs process contains a
 ;; lot of information about the same things that Info manuals
 ;; describe, but vanilla Info mode doesn't really do much to take
-;; advantage of that. Niceify-info remedies this.
+;; advantage of that.  Niceify-info remedies this.
 
 ;; When this library is executed, it adds a hook to Info page
-;; selection which does the following things:
+;; selection which carries out a process I call "niceification",
+;; because I have a longstanding fondness for terrible names.  This
+;; process does the following things:
 
-;; ...
+;; - Applies customizable faces to text surrounded by emphasis
+;;   characters * and _. The default faces for these are bold and
+;;   italic, respectively, because that's what the GNU-hosted HTML
+;;   versions of the Emacs manuals use, but they can be customized to
+;;   suit your taste.
 
-;; TODO make reversible (so customization can work)
-;;  - sweep out existing propsets before reniceifying?
-;; TODO add customization options
-;; TODO consider whether that's even worth it
+;; - Identifies Emacs Lisp code samples and fontifies them
+;;   accordingly.
+
+;; - Identifies references in `ticks', and where they refer to
+;;   function or variable bindings, applies the necessary text
+;;   properties to link them to the relevant documentation.  References
+;;   without a corresponding function or variable binding will be
+;;   fontified as Emacs Lisp, by the same method used for code
+;;   samples.
+
+;; - Identifies headers for longer-form documentation of several types
+;;   of objects, such as: "-- Function: find-file filename &optional
+;;   wildcards" and applies text properties making them easier to
+;;   identify and parse.  Names for documented things are linked to
+;;   their documentation in the same way as for references in
+;;   `ticks'. Functions' argument lists are additionally fontified
+;;   with a customizable face, which defaults to italic.
+
+;; Each kind of niceification has a corresponding customization option
+;; to enable or disable it.  You can easily access these via M-x
+;; customize-group RET niceify-info RET, or as a subgroup of the Info
+;; customization group. The faces used for emphases, and for function
+;; argument lists in headers, can also be customized.
+
+;;; Bugs:
+
+;; Little of this is done with perfect accuracy.  Here are the known
+;; issues:
+
+;; - Autoloaded libraries not currently loaded will not have
+;;   references in `ticks' linked or fontified.  (But if you load such
+;;   a library, and then revisit an Info page containing such
+;;   references, they will be correctly niceified.)
+
+;; - Code sample identification and fontification is questionable.  Due
+;;   to the lack of structural information in Texinfo files, the only
+;;   reliable method I've found of identifying a code sample is by
+;;   looking for places where indentation is deeper than the usual for
+;;   paragraphs on this page, and checking to see whether the first
+;;   following non-whitespace character is '(' or ';'.  This will fail
+;;   on Emacs Lisp forms which do not start with those characters, and
+;;   will have unpredictable and probably ugly results on code samples
+;;   not actually in Emacs Lisp which happen to start with one of
+;;   those characters.
+
+;;   The former issue I've found to be negligible, since it only
+;;   appears to affect printable forms of non-printable objects
+;;   (e.g. buffers, hash tables) which wouldn't be affected by
+;;   fontification anyway.
+
+;;   The latter issue I actually have yet to run across; in the
+;;   non-Emacs-related Texinfo manuals I have on the systems where I
+;;   wrote and tested this code, an admittedly brief and unsystematic
+;;   search has failed to turn up any code samples or other quotes
+;;   which erroneously trigger fontification.  If you find one, let me
+;;   hear about it! (See below for details on how.)
+
+;; - For symbols with both a function and a variable binding, the
+;;   function binding is always preferred.  This seems to be a fairly
+;;   rare case, and handling it (by prompting for which binding's
+;;   documentation to display) is surprisingly complex, so I plan to
+;;   leave it for a later version of the library.  If you're anxious to
+;;   have it before I get around to implementing it, feel free to open
+;;   a pull request!
+
+;; - Not all kinds of headers in Info pages are niceified, because for
+;;   a lot of them I couldn't figure out how to do anything useful.
+
+;;; Contributing:
+
+;; I welcome bug reports, feature requests, and proposed
+;; modifications. You can submit all of these via Github's issue and
+;; pull request trackers at
+;; https://github.com/aaron-em/niceify-info.el, and that is the method
+;; I prefer. Should you prefer not to use Github, or if the concern
+;; you wish to raise doesn't fit well into one of those categories,
+;; you can also contact me by email at me@aaron-miller.me.
 
 ;;; Code:
 
+(defgroup niceify-info nil
+  "Customize Info page fontification and hyperlinking."
+  :prefix 'niceify-info
+  :group 'info)
+
+(defcustom niceify-info-with-emphasis t
+  "Whether to niceify *bold* and _italic_ emphases."
+  :type 'boolean
+  :group 'niceify-info)
+
+(defcustom niceify-info-with-headers t
+  "Whether to niceify function, variable, and command headers."
+  :type 'boolean
+  :group 'niceify-info)
+
+(defcustom niceify-info-with-refs t
+  "Whether to niceify references in `ticks'."
+  :type 'boolean
+  :group 'niceify-info)
+
+(defcustom niceify-info-with-code-samples t
+  "Whether to niceify Emacs Lisp code samples."
+  :type 'boolean
+  :group 'niceify-info)
+
+(defcustom niceify-info-bold-emphasis-face 'bold
+  "The face used for *asterisk* emphasis."
+  :type 'face
+  :group 'niceify-info)
+
+(defcustom niceify-info-italic-emphasis-face 'italic
+  "The face used for _underscore_ emphasis."
+  :type 'face
+  :group 'niceify-info)
+
+(defcustom niceify-info-argument-list-face 'italic
+  "The face used for function argument lists."
+  :type 'face
+  :group 'niceify-info)
+
 (defun niceify-info nil
-  "Apply niceification functions to Info buffers."
+  "Apply niceification functions to Info buffers.
+
+This function is intended to be called from
+`Info-selection-hook', q.v., but can be safely evaluated by hand
+in an Info buffer as well."
+  (unless (eq (keymap-parent niceify-info-map) Info-mode-map)
+    (set-keymap-parent niceify-info-map Info-mode-map))
   (let ((inhibit-ro-prev-value inhibit-read-only))
     (unwind-protect
+         (setq inhibit-read-only t)
          (progn
-           (niceify-info-emphasis)
-           (niceify-info-headers)
-           (niceify-info-refs)
-           (niceify-info-code-samples))
+           (and niceify-info-with-emphasis
+                (niceify-info-emphasis))
+           (and niceify-info-with-headers
+                (niceify-info-headers))
+           (and niceify-info-with-refs
+                (niceify-info-refs))
+           (and niceify-info-with-code-samples
+                (niceify-info-code-samples)))
       (set-buffer-modified-p nil)
       (setq inhibit-read-only inhibit-ro-prev-value))))
 
 (defvar niceify-info-map (make-sparse-keymap)
   "Keymap applied to links created during niceification.")
-(set-keymap-parent niceify-info-map Info-mode-map)
 (define-key niceify-info-map [mouse-2]
-  'niceify-follow-link)
+  'niceify-info-follow-link)
 (define-key niceify-info-map (kbd "RET")
-  'niceify-follow-link)
+  'niceify-info-follow-link)
 (define-key niceify-info-map [follow-link]
   'mouse-face)
 
+(defun niceify-info-follow-link nil
+  "Follow a link produced by Info niceification."
+  (interactive)
+  (let ((niceify-link-props (get-text-property (point) 'niceify-link-props))
+        type name fun)
+    (cond
+      ((null niceify-link-props)
+       (message "Not on a niceified info link"))
+      (t
+       (setq type (plist-get niceify-link-props :type))
+       (setq name (plist-get niceify-link-props :name))
+       (setq fun (intern (concat "describe-" (symbol-name type))))
+       (let ((help-window-select t))
+         (funcall fun name))))))
+
+(defun niceify-info-fontify-as-elisp (from to)
+  "Fontify the region between FROM and TO as Emacs Lisp source."
+  (let ((content (buffer-substring-no-properties from to))
+        fontified)
+  (with-temp-buffer
+    (insert content)
+    (emacs-lisp-mode)
+    (font-lock-fontify-buffer)
+    (setq fontified (buffer-substring (point-min) (point-max))))
+  (goto-char from)
+  (delete-region from to)
+  (insert fontified)))
+
+(defun niceify-info-add-link (from to type name)
+  "Niceify a reference.
+
+Specifically, apply a set of text properties, over the range of
+buffer positions between FROM and TO, which together constitute a
+niceification link to the documentation for the TYPE binding of
+symbol NAME."
+  (set-text-properties from to
+                       (list 'face 'link
+                             'link 't
+                             'keymap niceify-info-map
+                             'mouse-face 'highlight
+                             'niceify-link-props (list :type type
+                                                       :name name)
+                             'help-echo (concat "mouse-1: visit documentation for this "
+                                                (symbol-name type)))))
+
 (defun niceify-info-code-samples nil
-  "Attempt to fontify Emacs Lisp code samples."
+  "Find and fontify Emacs Lisp code samples."
   (let ((paragraph-indent-depth 0)
         possible-sample-regex
         sample-start-regex
@@ -73,7 +247,8 @@
           (next-line)
           (beginning-of-line))
         (while (looking-at " ")
-          (incf paragraph-indent-depth)
+          (setq paragraph-indent-depth
+                (1+ paragraph-indent-depth))
           (forward-char 1))
         (setq possible-sample-regex
               (concat "^ \\{"
@@ -95,23 +270,15 @@
                (setq sample-end (point))
                (setq sample-content
                      (buffer-substring-no-properties sample-start sample-end))
-               (with-temp-buffer
-                 (insert sample-content)
-                 (emacs-lisp-mode)
-                 (font-lock-fontify-buffer)
-                 (setq sample-fontified
-                       (buffer-substring (point-min) (point-max))))
-               (goto-char sample-start)
-               (delete-region sample-start sample-end)
-               (insert sample-fontified)
+               (niceify-info-fontify-as-elisp sample-start sample-end)
                (goto-char sample-end)
                (setq sample-start nil)
                (setq sample-end nil)))))))))
 
 (defun niceify-info-emphasis nil
-  "Fontify *bold* and _underlined_ emphases."
-  (let ((face-map '(("_" . italic)
-                    ("*" . bold)))
+  "Fontify *asterisk* and _underscore_ emphases."
+  (let ((face-map '(("_" . niceify-info-italic-emphasis-face)
+                    ("*" . niceify-info-bold-emphasis-face)))
         emphasis-char)
     (save-match-data
       (save-excursion
@@ -126,55 +293,8 @@
                                (match-end 2)
                                `(face ,(cdr (assoc emphasis-char face-map)))))))))
 
-;; FIXME rename me
-(defun niceify-follow-link nil
-  "Follow a link produced by Info niceification."
-  (interactive)
-  (let ((niceify-link-props (get-text-property (point) 'niceify-link-props))
-        type name fun)
-    (cond
-      ((null niceify-link-props)
-       (message "Not on a niceified info link"))
-      (t
-       (setq type (plist-get niceify-link-props :type))
-       (setq name (plist-get niceify-link-props :name))
-       (setq fun (intern (concat "describe-" (symbol-name type))))
-       (let ((help-window-select t))
-         (funcall fun name))))))
-
-(defun niceify-info-fontify-as-elisp (from to)
-  "Fontify a region as Emacs Lisp source."
-  (let ((content (buffer-substring-no-properties from to))
-        fontified)
-  (with-temp-buffer
-    (insert content)
-    (emacs-lisp-mode)
-    (font-lock-fontify-buffer)
-    (setq fontified (buffer-substring (point-min) (point-max))))
-  (goto-char from)
-  (delete-region from to)
-  (insert fontified)))
-
-(defun niceify-info-add-link (from to type name)
-  "Niceify a reference.
-
-Specifically, apply a set of text properties, over the range of
-buffer positions between FROM and TO, which together constitute a
-niceification link, and which cause the newly added link to
-interoperate correctly with those added by Info-mode itself."
-  (add-text-properties from to
-                       (list 'face 'link
-                             'link 't
-                             'keymap niceify-info-map
-                             'mouse-face 'highlight
-                             'niceify-link-props (list :type type
-                                                       :name name)
-                             'help-echo (concat "mouse-1: visit documentation for this "
-                                                (symbol-name type)))))
-
 (defun niceify-info-refs nil
-  "Link backtick-and-quote references to the documentation of
-things they reference."
+  "Link `tick' references to corresponding documentation."
   (save-match-data
     (save-excursion
       (beginning-of-buffer)
@@ -185,7 +305,8 @@ things they reference."
                (from (- to (length (symbol-name name))))
                (type (cond
                        ((fboundp name) 'function)
-                       ((boundp name) 'variable)
+                       ((and (boundp name)
+                             (not (keywordp name))) 'variable)
                        (t 'unknown))))
           (if (and (not (eq type 'unknown))
                    (not (eq name 'nil))
@@ -194,9 +315,8 @@ things they reference."
               (niceify-info-fontify-as-elisp from to)))))))
 
 (defun niceify-info-headers nil
-  "Highlight function, variable, macro, etc. description headers
-in Info with arbitrary faces."
-  (let* ((args-face 'italic)
+  "Fontify object documentation headers."
+  (let* ((args-face niceify-info-argument-list-face)
          (indent-spaces 5) ;; NB this may not be immutable, though seems so
          (further-indent-regex
           (concat " \\{" (number-to-string (* indent-spaces 2)) ",\\}"))

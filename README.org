@@ -37,10 +37,15 @@ lot of information about the same things that Info manuals
 describe, but vanilla Info mode doesn't really do much to take
 advantage of that.  Niceify-info remedies this.
 
-When this library is evaluated, it adds a hook to Info page selection
-which carries out a process I call "niceification", because I have a
-longstanding fondness for terrible names.  This process does the
-following things:
+To improve a single Info page, do M-x niceify-info in that page's
+buffer.  If you decide you like the effect so much that you want it
+applied to all Info pages you visit, add the `niceify-info'
+function to `Info-selection-hook' in your init file.  For example:
+
+#+BEGIN_SRC emacs-lisp :eval never
+  (add-hook 'Info-selection-hook
+            #'niceify-info)
+#+END_SRC
 
 - Applies customizable faces to text surrounded by emphasis
   characters * and _. The default faces for these are bold and

@@ -26,13 +26,19 @@
 ;; describe, but vanilla Info mode doesn't really do much to take
 ;; advantage of that.  Niceify-info remedies this.
 
-;; When this library is evaluated, it adds a hook to Info page
-;; selection which carries out a process I call "niceification",
+;; To improve a single Info page, do M-x niceify-info in that page's
+;; buffer.  If you decide you like the effect so much that you want it
+;; applied to all Info pages you visit, add the `niceify-info'
+;; function to `Info-selection-hook' in your init file.  For example:
+
+;;     (add-hook 'Info-selection-hook #'niceify-info)
+
+;; This function applies a set of changes I call "niceification",
 ;; because I have a longstanding fondness for terrible names.  This
 ;; process does the following things:
 
 ;; - Applies customizable faces to text surrounded by emphasis
-;;   characters * and _. The default faces for these are bold and
+;;   characters * and _.  The default faces for these are bold and
 ;;   italic, respectively, because that's what the GNU-hosted HTML
 ;;   versions of the Emacs manuals use, but they can be customized to
 ;;   suit your taste.
@@ -52,13 +58,13 @@
 ;;   wildcards" and applies text properties making them easier to
 ;;   identify and parse.  Names for documented things are linked to
 ;;   their documentation in the same way as for references in
-;;   `ticks'. Functions' argument lists are additionally fontified
+;;   `ticks'.  Functions' argument lists are additionally fontified
 ;;   with a customizable face, which defaults to italic.
 
 ;; Each kind of niceification has a corresponding customization option
 ;; to enable or disable it.  You can easily access these via M-x
 ;; customize-group RET niceify-info RET, or as a subgroup of the Info
-;; customization group. The faces used for emphases, and for function
+;; customization group.  The faces used for emphases, and for function
 ;; argument lists in headers, can also be customized.
 
 ;;; Bugs:
@@ -162,29 +168,28 @@
   :type 'face
   :group 'niceify-info)
 
+;;;###autoload
 (defun niceify-info nil
   "Apply niceification functions to Info buffers.
 
 This function is intended to be called from
 `Info-selection-hook', q.v., but can be safely evaluated by hand
 in an Info buffer as well."
+  (interactive)
   (unless (eq (keymap-parent niceify-info-map) Info-mode-map)
     (set-keymap-parent niceify-info-map Info-mode-map))
-  (let ((inhibit-ro-prev-value inhibit-read-only))
-    (if niceify-info
-        (unwind-protect
-             (progn
-               (setq inhibit-read-only t)
-               (and niceify-info-with-emphasis
-                    (niceify-info-emphasis))
-               (and niceify-info-with-headers
-                    (niceify-info-headers))
-               (and niceify-info-with-refs
-                    (niceify-info-refs))
-               (and niceify-info-with-code-samples
-                    (niceify-info-code-samples)))
-          (set-buffer-modified-p nil)
-          (setq inhibit-read-only inhibit-ro-prev-value)))))
+  (if niceify-info
+      (unwind-protect
+           (let ((inhibit-read-only t))
+             (and niceify-info-with-emphasis
+                  (niceify-info-emphasis))
+             (and niceify-info-with-headers
+                  (niceify-info-headers))
+             (and niceify-info-with-refs
+                  (niceify-info-refs))
+             (and niceify-info-with-code-samples
+                  (niceify-info-code-samples)))
+        (set-buffer-modified-p nil))))
 
 (defvar niceify-info-map (make-sparse-keymap)
   "Keymap applied to links created during niceification.")
@@ -204,9 +209,9 @@ in an Info buffer as well."
       ((null niceify-link-props)
        (message "Not on a niceified info link"))
       (t
-       (setq type (plist-get niceify-link-props :type))
-       (setq name (plist-get niceify-link-props :name))
-       (setq fun (intern (concat "describe-" (symbol-name type))))
+       (setq type (plist-get niceify-link-props :type)
+             name (plist-get niceify-link-props :name)
+             fun (intern (concat "describe-" (symbol-name type))))
        (let ((help-window-select t))
          (funcall fun name))))))
 
@@ -259,8 +264,8 @@ symbol NAME."
         (setq possible-sample-regex
               (concat "^ \\{"
                       (number-to-string (1+ paragraph-indent-depth))
-                      ",\\}"))
-        (setq sample-start-regex (concat possible-sample-regex "[(;]"))
+                      ",\\}")
+              sample-start-regex (concat possible-sample-regex "[(;]"))
         (beginning-of-buffer)
         (while (not (eobp))
           (next-line)
@@ -268,18 +273,16 @@ symbol NAME."
           (cond
             ((and (null sample-start)
                   (looking-at sample-start-regex))
-             (progn
-               (setq sample-start (point))))
+             (setq sample-start (point)))
             ((and (not (null sample-start))
                   (not (looking-at possible-sample-regex)))
-             (progn
-               (setq sample-end (point))
-               (setq sample-content
-                     (buffer-substring-no-properties sample-start sample-end))
-               (niceify-info-fontify-as-elisp sample-start sample-end)
-               (goto-char sample-end)
-               (setq sample-start nil)
-               (setq sample-end nil)))))))))
+             (setq sample-end (point)
+                   sample-content
+                   (buffer-substring-no-properties sample-start sample-end))
+             (niceify-info-fontify-as-elisp sample-start sample-end)
+             (goto-char sample-end)
+             (setq sample-start nil
+                   sample-end nil))))))))
 
 (defun niceify-info-emphasis nil
   "Fontify *asterisk* and _underscore_ emphases."
@@ -328,17 +331,17 @@ symbol NAME."
           (concat " \\{" (number-to-string (* indent-spaces 2)) ",\\}"))
          type
          name
-         (type-map '((command . function)
-                     (user\ option . variable)
-                     (function . function)
-                     (variable . variable)
-                     (constant . constant)
-                     (const . constant)
-                     (face . variable)
-                     (hook . variable)
-                     (macro . function)
-                     (method . function)
-                     (option . variable)))
+         (type-map '(("command" . function)
+                     ("user option" . variable)
+                     ("function" . function)
+                     ("variable" . variable)
+                     ("constant" . constant)
+                     ("const" . constant)
+                     ("face" . variable)
+                     ("hook" . variable)
+                     ("macro" . function)
+                     ("method" . function)
+                     ("option" . variable)))
          (face-map '((function . font-lock-function-name-face)
                      (variable . font-lock-variable-name-face)
                      (constant . font-lock-constant-face))))
@@ -355,10 +358,10 @@ symbol NAME."
             (setq from (point))
             (re-search-forward ":" nil t)
             (backward-char 1)
-            (setq to (point))
-            (setq type
+            (setq to (point)
+                  type
                   (cdr (assoc
-                        (intern (downcase (buffer-substring-no-properties from to)))
+                        (downcase (buffer-substring-no-properties from to))
                         type-map)))
             (add-face-text-property from to
                                     (cdr (assoc type face-map)))
@@ -384,9 +387,6 @@ symbol NAME."
             
             (niceify-info-fontify-as-elisp from (point))
             (add-face-text-property from (point) args-face)))))))
-
-(add-hook 'Info-selection-hook
-          #'niceify-info)
 
 (provide 'niceify-info)
 

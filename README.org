@@ -47,6 +47,10 @@ function to `Info-selection-hook' in your init file.  For example:
             #'niceify-info)
 #+END_SRC
 
+This function applies a set of changes I call "niceification",
+because I have a longstanding fondness for terrible names.  This
+process does the following things:
+
 - Applies customizable faces to text surrounded by emphasis
   characters * and _. The default faces for these are bold and
   italic, respectively, because that's what the GNU-hosted HTML

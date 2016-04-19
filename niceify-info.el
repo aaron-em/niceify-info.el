@@ -307,7 +307,7 @@ symbol NAME."
   (save-match-data
     (save-excursion
       (beginning-of-buffer)
-      (while (re-search-forward "`\\(.*?\\)'" nil t)
+      (while (re-search-forward "[`‘]\\(.*?\\)['’]" nil t)
         (backward-char 1)
         (let* ((name (intern (match-string 1)))
                (to (point))

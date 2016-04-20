@@ -236,7 +236,7 @@ buffer positions between FROM and TO, which together constitute a
 niceification link to the documentation for the TYPE binding of
 symbol NAME."
   (set-text-properties from to
-                       (list 'face 'link
+                       (list 'font-lock-face 'link
                              'link 't
                              'keymap niceify-info-map
                              'mouse-face 'highlight
@@ -300,7 +300,7 @@ symbol NAME."
           (setq emphasis-char (match-string 1))
           (add-text-properties (match-beginning 2)
                                (match-end 2)
-                               `(face ,(cdr (assoc emphasis-char face-map)))))))))
+                               `(font-lock-face ,(cdr (assoc emphasis-char face-map)))))))))
 
 (defun niceify-info-refs nil
   "Link `tick' references to corresponding documentation."
@@ -363,8 +363,8 @@ symbol NAME."
                   (cdr (assoc
                         (downcase (buffer-substring-no-properties from to))
                         type-map)))
-            (add-face-text-property from to
-                                    (cdr (assoc type face-map)))
+            (add-text-properties from to
+                               `(font-lock-face ,(cdr (assoc type face-map))))
 
             (re-search-forward " " nil t)
             (setq from (point))
@@ -386,7 +386,7 @@ symbol NAME."
               (end-of-line))
             
             (niceify-info-fontify-as-elisp from (point))
-            (add-face-text-property from (point) args-face)))))))
+            (add-text-properties from (point) `(font-lock-face ,args-face))))))))
 
 (provide 'niceify-info)
 

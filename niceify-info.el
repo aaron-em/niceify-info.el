@@ -185,10 +185,10 @@ in an Info buffer as well."
                   (niceify-info-emphasis))
              (and niceify-info-with-headers
                   (niceify-info-headers))
-             (and niceify-info-with-refs
-                  (niceify-info-refs))
              (and niceify-info-with-code-samples
-                  (niceify-info-code-samples)))
+                  (niceify-info-code-samples))
+             (and niceify-info-with-refs
+                  (niceify-info-refs)))
         (set-buffer-modified-p nil))))
 
 (defvar niceify-info-map (make-sparse-keymap)

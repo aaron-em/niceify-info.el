@@ -223,6 +223,19 @@ in an Info buffer as well."
     (insert content)
     (emacs-lisp-mode)
     (font-lock-fontify-buffer)
+    (goto-char (point-min))
+    (let (from to next)
+      (while (setq next (next-single-property-change (point) 'face))
+        (goto-char next)
+        (if (get-text-property (point) 'face)
+            (setq from (point))
+            (setq to (point)))
+        (and from to
+             (progn
+               (set-text-properties from to
+                                    `(font-lock-face ,(get-text-property from 'face))))
+             (setq from nil
+                   to nil))))
     (setq fontified (buffer-substring (point-min) (point-max))))
   (goto-char from)
   (delete-region from to)

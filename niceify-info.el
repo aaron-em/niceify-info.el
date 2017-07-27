@@ -236,6 +236,7 @@ in an Info buffer as well."
                                     `(font-lock-face ,(get-text-property from 'face))))
              (setq from nil
                    to nil))))
+    (add-text-properties (point-min) (point-max) '(fontified t))
     (setq fontified (buffer-substring (point-min) (point-max))))
   (goto-char from)
   (delete-region from to)
